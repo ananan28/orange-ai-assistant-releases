@@ -1,0 +1,36 @@
+name: Windows recovery build
+on:
+  push:
+    branches: [restore/windows-source]
+    paths: [orange-windows-rebuilt-source.zip, .github/workflows/windows-build.yml]
+permissions:
+  contents: read
+concurrency:
+  group: windows-recovery-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Extract recovery source
+        shell: pwsh
+        run: Expand-Archive -Path orange-windows-rebuilt-source.zip -DestinationPath recovered
+      - name: Install locked dependencies
+        working-directory: recovered/orange-recovered/desktop
+        run: npm ci --no-audit --no-fund
+      - name: Build Windows installer without publishing
+        working-directory: recovered/orange-recovered/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run build:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OrangeAI-Windows-x64-test
+          path: recovered/orange-recovered/desktop/dist/*setup.exe
+          if-no-files-found: error
+          retention-days: 3
