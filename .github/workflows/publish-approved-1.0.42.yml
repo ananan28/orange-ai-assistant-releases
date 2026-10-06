@@ -1,0 +1,54 @@
+name: Publish approved Orange AI 1.0.42
+on:
+  push:
+    branches: [restore/windows-1.0.42]
+    paths: [.github/workflows/publish-approved-1.0.42.yml]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: orange-publish-1.0.42
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d661e48c3d82287327d4a359434339bc6a12d03e
+      - uses: actions/download-artifact@v4
+        with:
+          name: Orange-AI-Assistant-1.0.42-test
+          path: approved
+          run-id: 37517204682
+          github-token: ${{ github.token }}
+      - name: Verify approved installer
+        run: |
+          python3 - <<'PY'
+          import pathlib,hashlib,base64
+          d=pathlib.Path('approved')
+          p=d/'Orange-AI-Assistant-Setup-1.0.42.exe'
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='078f0e06ea25af73e6a701d799eea7a6e8bee13eff12bc1259e32a5c489c7afb', 'Approved installer hash mismatch'
+          y=(d/'latest.yml').read_text()
+          assert 'version: 1.0.42' in y
+          assert base64.b64encode(hashlib.sha512(p.read_bytes()).digest()).decode() in y
+          assert (d/'Orange-AI-Assistant-Setup-1.0.42.exe.blockmap').is_file()
+          print('Approved 1.0.42 installer and update metadata verified')
+          PY
+      - name: Publish approved assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ananan28/orange-ai-assistant-releases
+        run: |
+          cat > release-notes.txt <<'NOTES'
+          修复临时网络故障、会话刷新失败被误判为登录失效，导致反复退出的问题。
+          设备上限及默认值调整为 50 台。
+          软件与安装包版本统一为 1.0.42。
+          已通过 Windows 构建、回归检查及登录界面启动验证，用户核对后批准发布。
+          本次发布直接使用已核对的测试安装包，未重新构建。
+          NOTES
+          cp orange-source-1.0.42.zip Orange-AI-Assistant-1.0.42-Restored-Source-Code.zip
+          gh release create v1.0.42 --target d661e48c3d82287327d4a359434339bc6a12d03e --title "橘子AI助手 v1.0.42" --notes-file release-notes.txt --draft
+          gh release upload v1.0.42 approved/Orange-AI-Assistant-Setup-1.0.42.exe approved/Orange-AI-Assistant-Setup-1.0.42.exe.blockmap approved/latest.yml Orange-AI-Assistant-1.0.42-Restored-Source-Code.zip
+          gh release edit v1.0.42 --draft=false --latest
