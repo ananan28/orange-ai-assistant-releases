@@ -20,6 +20,12 @@ jobs:
         run: npm ci --no-audit --no-fund
       - working-directory: restored
         run: node scripts/prepare-release-extension.js
+      - name: Use persistent diagnostic session for extension support
+        working-directory: restored
+        shell: pwsh
+        run: |
+          $script = Get-Content scripts/smoke-gmail-login.cjs -Raw
+          $script.Replace("'gmail-diagnostic'", "'persist:gmail-diagnostic'") | Set-Content scripts/smoke-gmail-login.cjs -Encoding utf8
       - name: Real Google login page without credentials
         working-directory: restored
         run: node -e "const {spawnSync}=require('node:child_process');const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;const r=spawnSync(require('electron'),['scripts/smoke-gmail-login.cjs'],{stdio:'inherit',env});process.exit(r.status??1)"
