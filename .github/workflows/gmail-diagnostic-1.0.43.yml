@@ -1,0 +1,31 @@
+name: Google embedded login diagnostic 1.0.43
+on:
+  push:
+    branches: [fix/gmail-1.0.43]
+    paths: [.github/workflows/gmail-diagnostic-1.0.43.yml]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - shell: pwsh
+        run: Expand-Archive orange-source-1.0.43.zip -DestinationPath restored
+      - working-directory: restored
+        run: npm ci --no-audit --no-fund
+      - working-directory: restored
+        run: node scripts/prepare-release-extension.js
+      - name: Real Google login page without credentials
+        working-directory: restored
+        run: node -e "const {spawnSync}=require('node:child_process');const r=spawnSync(require('electron'),['scripts/smoke-gmail-login.cjs'],{stdio:'inherit',env:{...process.env,ELECTRON_RUN_AS_NODE:''}});process.exit(r.status??1)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Gmail-login-diagnostic-1.0.43
+          path: restored/gmail-diagnostic/*
+          if-no-files-found: warn
