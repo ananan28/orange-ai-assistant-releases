@@ -1,0 +1,51 @@
+name: Orange AI 1.0.43 Gmail test
+on:
+  push:
+    branches: [fix/gmail-1.0.43]
+    paths: [orange-source-1.0.43.zip, .github/workflows/windows-1.0.43-test.yml]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Extract source
+        shell: pwsh
+        run: Expand-Archive -LiteralPath orange-source-1.0.43.zip -DestinationPath restored
+      - name: Install locked dependencies
+        working-directory: restored
+        run: npm ci --no-audit --no-fund
+      - name: Regression checks
+        working-directory: restored
+        run: npm run check
+      - name: Build installer without publishing
+        working-directory: restored
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist:win
+      - name: Packaged login UI
+        working-directory: restored
+        run: node scripts/smoke-login-ui.cjs
+      - name: Google login page diagnostic without credentials
+        working-directory: restored
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          & .\node_modules\electron\dist\electron.exe scripts/smoke-gmail-login.cjs
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Orange-AI-Assistant-1.0.43-test
+          path: |
+            restored/dist/*.exe
+            restored/dist/*.blockmap
+            restored/dist/latest.yml
+            restored/gmail-diagnostic/*
+          if-no-files-found: error
+          retention-days: 7
