@@ -22,7 +22,7 @@ jobs:
         run: node scripts/prepare-release-extension.js
       - name: Real Google login page without credentials
         working-directory: restored
-        run: node -e "const {spawnSync}=require('node:child_process');const r=spawnSync(require('electron'),['scripts/smoke-gmail-login.cjs'],{stdio:'inherit',env:{...process.env,ELECTRON_RUN_AS_NODE:''}});process.exit(r.status??1)"
+        run: node -e "const {spawnSync}=require('node:child_process');const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;const r=spawnSync(require('electron'),['scripts/smoke-gmail-login.cjs'],{stdio:'inherit',env});process.exit(r.status??1)"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
