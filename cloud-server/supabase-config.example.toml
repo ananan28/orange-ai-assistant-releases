@@ -1,0 +1,2 @@
+[functions.cloud-bootstrap]
+verify_jwt = false # health is public; bootstrap verifies user JWT in handler

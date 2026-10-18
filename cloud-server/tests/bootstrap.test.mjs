@@ -1,0 +1,13 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createHandler} from '../functions/cloud-bootstrap/handler.mjs';
+const make=(overrides={})=>createHandler({checkDatabase:async()=>true,identify:async()=>({active:true}),...overrides});
+const req=(path,options)=>new Request('https://example.test/functions/v1/cloud-bootstrap/'+path,options);
+test('healthy database returns truthful readiness without credentials',async()=>{const r=await make()(req('health'));assert.equal(r.status,200);const d=await r.json();assert.equal(d.hotUpdatesReady,false);assert.equal(d.cloudBrowserReady,false);assert.equal(r.headers.get('cache-control'),'no-store')});
+test('database failure is unavailable',async()=>assert.equal((await make({checkDatabase:async()=>false})(req('health'))).status,503));
+test('private route requires bearer',async()=>assert.equal((await make()(req('bootstrap'))).status,401));
+test('invalid bearer fails verified identity',async()=>assert.equal((await make({identify:async()=>null})(req('bootstrap',{headers:{authorization:'Bearer invalid'}}))).status,401));
+test('disabled account denied',async()=>assert.equal((await make({identify:async()=>({active:false})})(req('bootstrap',{headers:{authorization:'Bearer fixture'}}))).status,403));
+test('authenticated bootstrap has no unapproved release',async()=>{const r=await make()(req('bootstrap',{headers:{authorization:'Bearer fixture'}}));assert.equal(r.status,200);assert.equal((await r.json()).release,null)});
+test('profile outage is retryable service failure',async()=>assert.equal((await make({identify:async()=>{throw Error('offline')}})(req('bootstrap',{headers:{authorization:'Bearer fixture'}}))).status,503));
+test('unsupported method rejected',async()=>assert.equal((await make()(req('health',{method:'POST'}))).status,405));
