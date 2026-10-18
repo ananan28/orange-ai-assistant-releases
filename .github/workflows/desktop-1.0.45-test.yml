@@ -33,7 +33,7 @@ jobs:
           archives = [
             ("orange-source-1.0.44-candidate.zip", "9eca065ef5a8758ba149cd2eaf49224e74d2ccfa71618549d2a5169a33bd412a"),
             ("investigation/orange-performance-investigation-overlay.zip", "4cb64fa39000bb6e0fea8edfb83112980770305553a3d8469b9647f29aeb47e6"),
-            ("build-input/orange-cloud-ui-1.0.45-overlay.zip", "49df77a02803f393f4021351fad30aad62bc8d72d2916f548aa57c4da7914b91")
+            ("build-input/orange-cloud-ui-1.0.45-overlay.zip", "065d326ad1a604c0b4b43f6dc9ee7a648a4db7fe9d2e550b4e94f3cbabfe1f6f")
           ]
           for filename, digest in archives:
             assert hashlib.sha256(Path(filename).read_bytes()).hexdigest() == digest, filename
