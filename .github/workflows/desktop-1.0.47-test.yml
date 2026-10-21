@@ -37,7 +37,7 @@ jobs:
             ("investigation/orange-performance-investigation-overlay.zip", "4cb64fa39000bb6e0fea8edfb83112980770305553a3d8469b9647f29aeb47e6"),
             ("build-input/orange-cloud-ui-1.0.45-overlay.zip", "065d326ad1a604c0b4b43f6dc9ee7a648a4db7fe9d2e550b4e94f3cbabfe1f6f"),
             ("build-input/orange-navigation-1.0.46-overlay.zip", "155106b30bb281f33233f8656292a5459d2a63b90e28f0f19c95fcf746df3486"),
-            ("build-input/orange-xhsim-1.0.47-overlay.zip", "d75c5cf120364e75d21da82edca2537368f392f42aededd073f6d14a8fc5aa4d")
+            ("build-input/orange-xhsim-1.0.47-overlay.zip", "ebab473979d86992e72c082082939f72be465df26faedd4ce6592957f68e32eb")
           ]
           for filename, digest in archives:
             assert hashlib.sha256(Path(filename).read_bytes()).hexdigest() == digest, filename
@@ -54,6 +54,9 @@ jobs:
       - name: Install locked dependencies
         working-directory: restored
         run: npm ci --no-audit --no-fund
+      - name: Native Xhsim translation and send regression
+        working-directory: restored
+        run: node scripts/run-xhsim-native-test.cjs
       - name: Regression checks
         working-directory: restored
         run: npm run check
@@ -66,9 +69,6 @@ jobs:
       - name: Native workbench navigation and rendering checks
         working-directory: restored
         run: node scripts/run-workbench-native-test.cjs
-      - name: Native Xhsim translation and send regression
-        working-directory: restored
-        run: node scripts/run-xhsim-native-test.cjs
       - name: Build test installer without publishing
         working-directory: restored
         env:
