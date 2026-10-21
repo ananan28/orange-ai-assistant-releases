@@ -1,0 +1,106 @@
+name: Orange AI 1.0.47 desktop test
+on:
+  push:
+    branches: [build/1.0.47-test]
+    paths:
+      - .github/workflows/desktop-1.0.47-test.yml
+      - orange-source-1.0.44-candidate.zip
+      - investigation/orange-performance-investigation-overlay.zip
+      - build-input/orange-cloud-ui-1.0.45-overlay.zip
+      - build-input/orange-navigation-1.0.46-overlay.zip
+      - build-input/orange-xhsim-1.0.47-overlay.zip
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            script: dist:win
+            artifact: Orange-AI-Assistant-1.0.47-Windows-x64-test
+          - runner: macos-14
+            script: dist:mac
+            artifact: Orange-AI-Assistant-1.0.47-macOS-arm64-test
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and reconstruct source
+        shell: python
+        run: |
+          import hashlib, zipfile
+          from pathlib import Path
+          archives = [
+            ("orange-source-1.0.44-candidate.zip", "9eca065ef5a8758ba149cd2eaf49224e74d2ccfa71618549d2a5169a33bd412a"),
+            ("investigation/orange-performance-investigation-overlay.zip", "4cb64fa39000bb6e0fea8edfb83112980770305553a3d8469b9647f29aeb47e6"),
+            ("build-input/orange-cloud-ui-1.0.45-overlay.zip", "065d326ad1a604c0b4b43f6dc9ee7a648a4db7fe9d2e550b4e94f3cbabfe1f6f"),
+            ("build-input/orange-navigation-1.0.46-overlay.zip", "155106b30bb281f33233f8656292a5459d2a63b90e28f0f19c95fcf746df3486"),
+            ("build-input/orange-xhsim-1.0.47-overlay.zip", "bfe04fd72b3b5eba1928847727cc6c9d48fffff9274df7d6a2b7d2cfa22659c9")
+          ]
+          for filename, digest in archives:
+            assert hashlib.sha256(Path(filename).read_bytes()).hexdigest() == digest, filename
+            with zipfile.ZipFile(filename) as archive:
+              archive.extractall("restored")
+          with zipfile.ZipFile("orange-source-1.0.43.zip") as archive:
+            for filename in ["main.js", "site-preload.js", "extension-source/ai_reply.js"]:
+              archive.extract(filename, "baseline")
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: restored/package-lock.json
+      - name: Install locked dependencies
+        working-directory: restored
+        run: npm ci --no-audit --no-fund
+      - name: Regression checks
+        working-directory: restored
+        run: npm run check
+      - name: Common overhead source comparison
+        working-directory: restored
+        run: node scripts/audit-common-overhead.cjs ../baseline
+      - name: Native signed UI update and rollback checks
+        working-directory: restored
+        run: node scripts/run-native-ui-test.cjs
+      - name: Native workbench navigation and rendering checks
+        working-directory: restored
+        run: node scripts/run-workbench-native-test.cjs
+      - name: Native Xhsim translation and send regression
+        working-directory: restored
+        run: node scripts/run-xhsim-native-test.cjs
+      - name: Build test installer without publishing
+        working-directory: restored
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run ${{ matrix.script }}
+      - name: Packaged login UI
+        working-directory: restored
+        run: node scripts/smoke-login-ui.cjs
+      - name: Verify native Mac architecture
+        if: runner.os == 'macOS'
+        working-directory: restored
+        run: file dist/mac-arm64/*.app/Contents/MacOS/*
+      - name: Package source used by this build
+        shell: python
+        run: |
+          import zipfile
+          from pathlib import Path
+          root = Path("restored")
+          with zipfile.ZipFile("Orange-AI-Assistant-1.0.47-source.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+            for file in sorted(root.rglob("*")):
+              relative = file.relative_to(root)
+              if file.is_file() and not set(relative.parts).intersection({"node_modules", "dist", "release-app", "release-extension"}):
+                archive.write(file, relative)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            restored/dist/*.exe
+            restored/dist/*.dmg
+            restored/dist/*.zip
+            restored/dist/*.blockmap
+            restored/dist/latest*.yml
+            Orange-AI-Assistant-1.0.47-source.zip
+          if-no-files-found: error
+          retention-days: 14
