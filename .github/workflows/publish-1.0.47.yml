@@ -1,0 +1,87 @@
+name: Publish tested Orange AI 1.0.47
+on:
+  push:
+    branches: [release/1.0.47-approved]
+    paths: [.github/workflows/publish-1.0.47.yml]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: orange-release-1.0.47
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ananan28/orange-ai-assistant-releases
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify approved successful build and retrieve its exact artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/$GH_REPO/actions/runs/39671433723 > approved-run.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open('approved-run.json'))
+          assert r['status']=='completed' and r['conclusion']=='success'
+          assert r['head_sha']=='60fbb56be383071f0f05ceaea5e371450b9f7f53'
+          PY
+          gh api repos/$GH_REPO/actions/artifacts/12380117260/zip > approved-windows.zip
+          gh api repos/$GH_REPO/actions/artifacts/12380142134/zip > approved-mac.zip
+      - name: Verify archives, package versions, installer hashes and stage approved files
+        shell: python
+        run: |
+          import hashlib,zipfile,re,base64,shutil,json
+          from pathlib import Path
+          for name,digest in [
+            ('windows','ae8324fe415953a73c9a93618fbbe6a52be8487edf79f8313e77a1444fc6c709'),
+            ('mac','99c46a5175b62477384fa8ece0dc31a6b72f777e5648e336450de75a1186a741')
+          ]:
+            archive=Path('approved-'+name+'.zip')
+            assert hashlib.sha256(archive.read_bytes()).hexdigest()==digest
+            root=Path(name).resolve()
+            with zipfile.ZipFile(archive) as z:
+              for f in z.namelist():
+                assert (root/f).resolve().is_relative_to(root)
+              z.extractall(root)
+            dist=root/'restored/dist'
+            manifest=next(dist.glob('latest*.yml')).read_text()
+            assert re.search(r'^version: 1\.0\.47$',manifest,re.M)
+            entries=re.findall(r'- url: ([^\n]+)\n\s+sha512: ([^\n]+)\n\s+size: (\d+)',manifest)
+            assert entries
+            for filename,sha,size in entries:
+              file=dist/filename.strip()
+              assert file.stat().st_size==int(size)
+              assert base64.b64encode(hashlib.sha512(file.read_bytes()).digest()).decode()==sha.strip()
+            with zipfile.ZipFile(root/'Orange-AI-Assistant-1.0.47-source.zip') as z:
+              assert json.loads(z.read('package.json'))['version']=='1.0.47'
+          out=Path('release-assets');out.mkdir()
+          for root in [Path('windows/restored/dist'),Path('mac/restored/dist')]:
+            for file in root.iterdir():
+              if file.is_file() and (file.suffix in ['.exe','.dmg','.zip','.blockmap'] or file.name in ['latest.yml','latest-mac.yml']):
+                assert not (out/file.name).exists(),file.name
+                shutil.copy2(file,out/file.name)
+          shutil.copy2('windows/Orange-AI-Assistant-1.0.47-source.zip',out/'Orange-AI-Assistant-1.0.47-source.zip')
+          required={'Orange-AI-Assistant-Setup-1.0.47.exe','Orange-AI-Assistant-1.0.47-mac-arm64.dmg','Orange-AI-Assistant-1.0.47-mac-arm64.zip','latest.yml','latest-mac.yml'}
+          assert required.issubset({p.name for p in out.iterdir()})
+          (out/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(out.iterdir()) if p.is_file()))
+          Path('release-notes.txt').write_text('橘子AI助手 1.0.47\n\n修正星河聊天气泡识别、翻译请求通道及失败提示，提供重试翻译。发送前整理文字时不再重复抢回输入焦点。\n包含前版的窗口叠加、拖动白屏、网页弹窗会话及平台登录保留修正。\n\nWindows x64 和 macOS Apple Silicon ARM64。Mac 安装包未签名及公证。\nWindows/Mac 自动化回归和模拟网页交互检查通过；第三方网站实际行为仍受网站与网络环境影响。\n\n本发布直接复用已测试的构建 39671433723，源代码提交 60fbb56be383071f0f05ceaea5e371450b9f7f53。\n',encoding='utf-8')
+          print('Verified exact approved artifacts; staged:',sorted(p.name for p in out.iterdir()))
+      - name: Publish approved version with automatic update manifests
+        shell: python
+        run: |
+          import subprocess,json
+          from pathlib import Path
+          repo='ananan28/orange-ai-assistant-releases'
+          existing=subprocess.run(['gh','release','view','v1.0.47','--repo',repo,'--json','isDraft'],capture_output=True,text=True)
+          if existing.returncode==0:
+            assert json.loads(existing.stdout)['isDraft'],'Version already published; refusing to replace it'
+          else:
+            subprocess.run(['gh','release','create','v1.0.47','--repo',repo,'--target','60fbb56be383071f0f05ceaea5e371450b9f7f53','--title','橘子AI助手 1.0.47','--notes-file','release-notes.txt','--draft'],check=True)
+          files=[str(p) for p in sorted(Path('release-assets').iterdir()) if p.is_file()]
+          subprocess.run(['gh','release','upload','v1.0.47','--repo',repo,*files,'--clobber'],check=True)
+          subprocess.run(['gh','release','edit','v1.0.47','--repo',repo,'--draft=false','--latest'],check=True)
+          subprocess.run(['gh','release','view','v1.0.47','--repo',repo,'--json','url,isDraft,assets'],check=True)
