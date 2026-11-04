@@ -41,7 +41,7 @@ jobs:
             ("build-input/orange-navigation-1.0.46-overlay.zip", "155106b30bb281f33233f8656292a5459d2a63b90e28f0f19c95fcf746df3486"),
             ("build-input/orange-xhsim-1.0.47-overlay.zip", "ebab473979d86992e72c082082939f72be465df26faedd4ce6592957f68e32eb"),
             ("build-input/orange-embedded-popups-1.0.48-overlay.zip", "0562f5421f39b09c558a2ddb4a3ef3d1b02c6f23f35b405ba6918bfb1d1cadd9"),
-            ("build-input/orange-gmail-pool-1.0.49-overlay.zip", "663478f2ad8b737207907bb89d46735b2921ba11e437c95130647c4546c2f70a")
+            ("build-input/orange-gmail-pool-1.0.49-overlay.zip", "af800577a1d2ecb9be41f3b7089bd93bdea8e255c81b545da3a00660d599e036")
           ]
           for filename, digest in archives:
             assert hashlib.sha256(Path(filename).read_bytes()).hexdigest() == digest, filename
