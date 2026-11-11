@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/desktop-1.0.49-release.yml
       - release-tools/publish-1.0.49.py
+      - release-tools/smoke-gmail-pool.cjs
       - orange-source-1.0.44-candidate.zip
       - investigation/orange-performance-investigation-overlay.zip
       - build-input/orange-cloud-ui-1.0.45-overlay.zip
@@ -33,7 +34,7 @@ jobs:
       - name: Verify and reconstruct source
         shell: python
         run: |
-          import hashlib, zipfile
+          import hashlib, zipfile, shutil
           from pathlib import Path
           archives = [
             ("orange-source-1.0.44-candidate.zip", "9eca065ef5a8758ba149cd2eaf49224e74d2ccfa71618549d2a5169a33bd412a"),
@@ -48,6 +49,7 @@ jobs:
             assert hashlib.sha256(Path(filename).read_bytes()).hexdigest() == digest, filename
             with zipfile.ZipFile(filename) as archive:
               archive.extractall("restored")
+          shutil.copyfile("release-tools/smoke-gmail-pool.cjs", "restored/scripts/smoke-gmail-pool.cjs")
           with zipfile.ZipFile("orange-source-1.0.43.zip") as archive:
             for filename in ["main.js", "site-preload.js", "extension-source/ai_reply.js"]:
               archive.extract(filename, "baseline")
