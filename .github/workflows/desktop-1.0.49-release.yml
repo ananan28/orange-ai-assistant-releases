@@ -23,7 +23,7 @@ jobs:
           - runner: windows-latest
             script: dist:win
             artifact: Orange-AI-Assistant-1.0.49-Windows-x64-release
-          - runner: macos-14
+          - runner: macos-15
             script: dist:mac
             artifact: Orange-AI-Assistant-1.0.49-macOS-arm64-release
     runs-on: ${{ matrix.runner }}
