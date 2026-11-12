@@ -1,0 +1,41 @@
+name: Restore approved 1.0.47 stable release
+on:
+  push:
+    branches: [rollback/1.0.47-approved]
+    paths: [.github/workflows/rollback-1.0.47-approved.yml]
+permissions:
+  contents: write
+jobs:
+  restore-stable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Withdraw 1.0.49 from stable updates and restore 1.0.47
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import json, os, urllib.request
+          base = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY']
+          def api(path, data=None):
+            request = urllib.request.Request(base+path,
+              data=json.dumps(data).encode() if data is not None else None,
+              headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'], 'Accept':'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28'},
+              method='PATCH' if data is not None else 'GET')
+            with urllib.request.urlopen(request,timeout=40) as response:
+              return json.load(response)
+          stable=api('/releases/tags/v1.0.47')
+          withdrawn=api('/releases/tags/v1.0.49')
+          assert not stable['draft'] and not stable['prerelease']
+          names={asset['name'] for asset in stable['assets']}
+          assert {'latest.yml','latest-mac.yml','Orange-AI-Assistant-1.0.47-mac-arm64.dmg','Orange-AI-Assistant-Setup-1.0.47.exe'} <= names
+          notice='此版本已撤回正式更新渠道，请使用 1.0.47。\n\n'
+          body=withdrawn.get('body') or ''
+          if not body.startswith(notice): body=notice+body
+          api('/releases/'+str(withdrawn['id']), {'prerelease':True,'make_latest':'false','name':'橘子AI助手 1.0.49（已撤回，请使用 1.0.47）','body':body})
+          api('/releases/'+str(stable['id']), {'make_latest':'true'})
+          latest=api('/releases/latest')
+          old=api('/releases/tags/v1.0.49')
+          assert latest['tag_name']=='v1.0.47' and not latest['prerelease']
+          assert old['prerelease'] and not old['draft']
+          print(json.dumps({'stable':latest['tag_name'],'withdrawn_from_stable':'v1.0.49','release_url':latest['html_url'],'assets':[a['browser_download_url'] for a in latest['assets'] if a['name'].endswith(('.dmg','.exe'))]},ensure_ascii=False))
